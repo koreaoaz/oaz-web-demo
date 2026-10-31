@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { deletePost, fetchPosts, insertPost } from "../../services/board.service"
+import { deletePost, fetchPosts, insertPost, updatePost } from "../../services/board.service"
 import { persistOrder } from "../../services/order.service"
 import { useDragAndDrop } from "../../hooks/useDragAndDrop"
 import { BOARD_TABLE_MAP } from "../../constants"
@@ -25,7 +25,35 @@ export function NoticeForm() {
   const [listLoading, setListLoading] = useState(true)
   const [filter, setFilter] = useState<NoticeFilter>("공지")
   const [listError, setListError] = useState<string | null>(null)
+  const [editing, setEditing] = useState<{ id: number; field: "text" | "description"; value: string } | null>(null)
+  const [editError, setEditError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const savingRef = useRef(false)
   const requestVersion = useRef(0)
+
+  const startEditing = (post: NoticeRow, field: "text" | "description") => {
+    if (savingRef.current) return
+    setEditError(null)
+    setEditing({ id: post.id, field, value: post[field] ?? "" })
+  }
+
+  const saveEdit = async () => {
+    if (!editing || savingRef.current) return
+    const { id, field, value } = editing
+    savingRef.current = true
+    setSaving(true)
+    setEditError(null)
+    try {
+      await updatePost(BOARD_TABLE_MAP["공지"], id, { [field]: value })
+      setEditing(null)
+      await loadPosts()
+    } catch {
+      setEditError("수정 내용을 저장하지 못했습니다. 권한과 연결 상태를 확인한 뒤 다시 시도해 주세요.")
+    } finally {
+      savingRef.current = false
+      setSaving(false)
+    }
+  }
 
   const fetchList = useCallback(() => {
     const version = ++requestVersion.current
@@ -110,6 +138,7 @@ export function NoticeForm() {
     <div className="space-y-6">
       <p className="text-sm text-gray-500">데모에서는 안전한 정렬 저장을 준비 중입니다.</p>
       {listError && <p role="alert" className="text-sm text-red-600">{listError}</p>}
+      {editError && <p role="alert" className="text-sm text-red-600">{editError}</p>}
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="flex gap-2 mb-2">
             {(["공지", "홍보"] as NoticeFilter[]).map((type) => (
@@ -220,10 +249,34 @@ export function NoticeForm() {
                   )}
                 >
                   <td className="border p-2 text-center text-gray-400 select-none">⠿</td>
-                  <td className="border p-2">{post.text}</td>
-                  <td className="border p-2">{post.description}</td>
+                  {(["text", "description"] as const).map((field) => (
+                    <td key={field} className="border p-2" onDoubleClick={() => { if (editing?.id !== post.id || editing.field !== field) startEditing(post, field) }}>
+                      {editing?.id === post.id && editing.field === field ? (
+                        <div className="space-y-2">
+                          <textarea
+                            aria-label={field === "text" ? "공지 제목 수정" : "공지 내용 수정"}
+                            className="w-full border px-2 py-1"
+                            value={editing.value}
+                            disabled={saving}
+                            autoFocus
+                            onChange={(event) => setEditing({ ...editing, value: event.target.value })}
+                          />
+                          <div className="flex gap-2">
+                            <button type="button" disabled={saving} onClick={() => void saveEdit()} className="rounded bg-blue-600 px-2 py-1 text-white disabled:opacity-50">저장</button>
+                            <button type="button" disabled={saving} onClick={() => { setEditing(null); setEditError(null) }} className="rounded border px-2 py-1">취소</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <span>{post[field]}</span>{" "}
+                          <button type="button" disabled={saving} onClick={() => startEditing(post, field)} aria-label={field === "text" ? "공지 제목 편집" : "공지 내용 편집"} className="text-blue-700 underline disabled:opacity-50">수정</button>
+                        </div>
+                      )}
+                    </td>
+                  ))}
                   <td className="border p-2 text-center">
                     <button
+                      disabled={saving}
                       onClick={() => handleDelete(post.id)}
                       className="px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600"
                     >

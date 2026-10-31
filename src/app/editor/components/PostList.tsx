@@ -236,6 +236,12 @@ export function PostList<B extends BoardType>({ board, posts, setPosts, reload, 
                 key={col.field}
                 className="border p-2 cursor-pointer"
                 onClick={() => {
+                  if (editingCell?.id === post.id && editingCell.field === col.field) return
+                  setEditingCell({ id: post.id, field: col.field })
+                  setEditingValue(textFields[col.field] ?? "")
+                }}
+                onDoubleClick={() => {
+                  if (editingCell?.id === post.id && editingCell.field === col.field) return
                   setEditingCell({ id: post.id, field: col.field })
                   setEditingValue(textFields[col.field] ?? "")
                 }}
