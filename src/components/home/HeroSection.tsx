@@ -1,0 +1,34 @@
+'use client';
+
+import React from "react";
+import { motion } from "framer-motion";
+
+export default function HeroSection() {
+  return (
+    <section className="pt-20 pb-5 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto text-center">
+
+        {/* Main Heading */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 0.1 }}
+          className="mb-8"
+        >
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.1 }}
+            className="mb-8"
+          >
+            <div className="mx-auto text-6xl font-bold text-blue-800">OAZ DEMO</div>
+            <p className="text-base sm:text-lg lg:text-xl mt-4 bg-gradient-to-r from-gray-900 via-gray-700 to-gray-900 bg-clip-text text-transparent font-bold">
+              - Korea University E.E. Software Society -
+            </p>
+          </motion.div>
+          
+        </motion.div>
+      </div>
+    </section>
+  );
+}

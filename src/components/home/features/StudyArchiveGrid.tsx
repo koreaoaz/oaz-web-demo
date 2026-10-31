@@ -1,0 +1,291 @@
+"use client"
+import { useCallback, useEffect, useRef, useState } from "react"
+import type { SetStateAction } from "react"
+import Image from "next/image"
+import { supabase } from "@/lib/supabaseClient"
+
+const BUCKET = "study-images"
+const CARD_COUNT = 6
+
+type StudyItem = {
+  id?: number
+  name: string
+  path: string
+  signedUrl: string
+  created_at?: string | null
+  studyName: string
+  studyDescription: string
+  studyLeader: string
+  year?: number
+  semester?: number
+}
+
+export default function StudyArchiveGrid() {
+  const [view, setView] = useState<{ page: number; expandedIndex: number | null }>({ page: 0, expandedIndex: null })
+  const { page: currentPage, expandedIndex } = view
+  const setExpandedIndex = useCallback((index: number | null) => setView((previous) => ({ ...previous, expandedIndex: index })), [])
+  const setCurrentPage = useCallback((update: SetStateAction<number>) => setView((previous) => {
+    const page = typeof update === "function" ? update(previous.page) : update
+    return page === previous.page ? previous : { page, expandedIndex: null }
+  }), [])
+  const expandedCardRef = useRef<HTMLDivElement>(null)
+  const [files, setFiles] = useState<StudyItem[]>([])
+  const [supabaseError, setSupabaseError] = useState<string | null>(null)
+  const [latestLabel, setLatestLabel] = useState<string | null>(null)
+
+  const totalCount = files.length
+  const totalPages = Math.max(1, Math.ceil(totalCount / CARD_COUNT))
+  const start = currentPage * CARD_COUNT
+  const end = Math.min(start + CARD_COUNT, totalCount)
+  const visibleItems = files.slice(start, end)
+
+  const handleCardClick = (index: number) => {
+    setExpandedIndex(expandedIndex === index ? null : index)
+  }
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setExpandedIndex(null)
+    }
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (expandedCardRef.current && !expandedCardRef.current.contains(e.target as Node)) {
+        setExpandedIndex(null)
+      }
+    }
+
+    if (expandedIndex !== null) {
+      document.addEventListener("keydown", handleKeyDown)
+      document.addEventListener("mousedown", handleClickOutside)
+      return () => {
+        document.removeEventListener("keydown", handleKeyDown)
+        document.removeEventListener("mousedown", handleClickOutside)
+      }
+    }
+  }, [expandedIndex, setExpandedIndex])
+
+  useEffect(() => {
+    let active = true
+    async function fetchList() {
+      try {
+        const { data: studyData, error: dbError } = await supabase
+          .from("editor_2_studies")
+          .select("*")
+          .order("created_at", { ascending: false })
+
+        if (!active) return
+
+        if (dbError) {
+          setSupabaseError(`데이터베이스 오류: ${dbError.message}`)
+          return
+        }
+
+        if (!studyData) {
+          setFiles([])
+          return
+        }
+
+        const items: StudyItem[] = studyData.map((record) => {
+          let imageUrl = "/placeholder.svg"
+
+          if (record.filename) {
+            const { data } = supabase.storage
+              .from(BUCKET)
+              .getPublicUrl(record.filename)
+
+            imageUrl = data.publicUrl
+          }
+
+          return {
+            id: record.id,
+            name: record.filename ?? "",
+            path: record.filename ?? "",
+            signedUrl: imageUrl,
+            created_at: record.created_at ?? null,
+            studyName: record.study_name ?? "스터디",
+            studyDescription: record.outline ?? "설명이 없습니다.",
+            studyLeader: record.leader ?? "미정",
+            year: record.year ?? undefined,
+            semester: record.semester ?? undefined,
+          }
+        })
+
+        const latest = items.reduce<StudyItem | null>((latest, item) => {
+          if (!latest) return item
+          if ((item.year ?? 0) > (latest.year ?? 0)) return item
+          if ((item.year ?? 0) === (latest.year ?? 0) && (item.semester ?? 0) > (latest.semester ?? 0)) return item
+          return latest
+        }, null)
+
+        const latestItems = latest
+          ? items.filter((item) => item.year === latest.year && item.semester === latest.semester)
+          : items
+
+        setLatestLabel(latest?.year && latest?.semester ? `${latest.year}-${latest.semester}` : null)
+        setFiles(latestItems)
+        setCurrentPage(0)
+      } catch {
+        if (active) setSupabaseError("데이터 로딩 중 오류가 발생했습니다.")
+      }
+    }
+
+    fetchList()
+    return () => { active = false }
+  }, [setCurrentPage])
+
+  const goPrev = () => setCurrentPage((p) => Math.max(0, p - 1))
+  const goNext = () => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))
+
+  return (
+    <div className="w-full px-10 py-8">
+      <div className="mb-6 flex items-center justify-between">
+        <h2 className="text-3xl font-bold">{latestLabel ? `${latestLabel} 스터디 목록` : "스터디 목록"}</h2>
+      </div>
+
+      <div className="relative w-full max-w-5xl mx-auto">
+        {supabaseError ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="text-6xl mb-4">⚠️</div>
+            <h3 className="text-xl font-semibold mb-2 text-red-500">연결 오류</h3>
+            <p className="text-muted-foreground">{supabaseError}</p>
+          </div>
+        ) : files.length === 0 ? (
+          <div className="flex items-center justify-center py-20">
+            <p className="text-muted-foreground">스터디 목록을 불러오는 중...</p>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-3 gap-6" style={{ minHeight: "600px" }}>
+              {visibleItems.map((item, idx) => {
+                const globalIdx = start + idx
+                const row = Math.floor(idx / 3)
+                const isInExpandedRows =
+                  expandedIndex !== null &&
+                  (Math.floor((expandedIndex - start) / 3) === row ||
+                    Math.floor((expandedIndex - start) / 3) === row - 1)
+
+                return (
+                  <div
+                    key={item.id === undefined ? `path-${item.path}-${globalIdx}` : `study-${item.id}`}
+                    className={`relative rounded-lg shadow-md bg-white overflow-hidden transition-all duration-300 cursor-pointer hover:shadow-lg group ${
+                      expandedIndex !== null && isInExpandedRows ? "opacity-0" : "opacity-100"
+                    }`}
+                    onClick={() => handleCardClick(globalIdx)}
+                    style={{ height: "300px" }}
+                  >
+                    <div className="h-full p-6 flex flex-col items-center justify-center">
+                      <div className="w-4/5 aspect-square rounded-md overflow-hidden mb-4 transition-transform duration-300 group-hover:-translate-y-1">
+                        <Image
+                          src={item.signedUrl || "/placeholder.svg"}
+                          alt={item.studyName}
+                          width={200}
+                          height={200}
+                          className="w-full h-full object-cover"
+                          unoptimized
+                        />
+                      </div>
+                      <h3 className="text-base font-semibold text-center px-2 transition-all duration-300 group-hover:-translate-y-1 group-hover:text-gray-500">
+                        {item.studyName}
+                      </h3>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {expandedIndex !== null && files[expandedIndex] && (
+              <div
+                ref={expandedCardRef}
+                className="absolute bg-white rounded-lg shadow-xl transition-all duration-300 z-20"
+                style={{
+                  top: (() => {
+                    const cardRow = Math.floor((expandedIndex - start) / 3)
+                    const totalRows = Math.ceil(visibleItems.length / 3)
+                    if (cardRow === totalRows - 1 && totalRows > 1) {
+                      return `${(cardRow - 1) * 324}px`
+                    }
+                    return `${cardRow * 324}px`
+                  })(),
+                  left: "0",
+                  right: "0",
+                  height: "635px",
+                }}
+              >
+                <div className="h-full flex">
+                  <div className="w-1/2 p-8 flex items-center justify-center">
+                    <div className="w-full aspect-square rounded-lg overflow-hidden max-w-[320px]">
+                      <Image
+                        src={files[expandedIndex].signedUrl || "/placeholder.svg"}
+                        alt={files[expandedIndex].studyName}
+                        width={400}
+                        height={400}
+                        className="w-full h-full object-cover"
+                        unoptimized
+                      />
+                    </div>
+                  </div>
+                  <div className="w-1/2 p-8 flex flex-col justify-center">
+                    <h2 className="text-2xl font-bold mb-6">{files[expandedIndex].studyName}</h2>
+                    <div className="mb-4">
+                      <span className="text-lg font-semibold text-gray-700">스터디장: </span>
+                      <span className="text-lg text-gray-600">{files[expandedIndex].studyLeader}</span>
+                    </div>
+                    <div className="text-gray-600 leading-relaxed overflow-y-auto max-h-[400px]">
+                      {files[expandedIndex].studyDescription.split("\n").map((line, i) => (
+                        <p key={i} className="mb-2">
+                          {line}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {currentPage > 0 && (
+              <button
+                type="button"
+                onClick={goPrev}
+                className="absolute bottom-4 -left-14 -translate-x-[10px] h-11 w-11 rounded-full bg-black text-white shadow backdrop-blur flex items-center justify-center transform transition-all duration-300 ease-out hover:scale-110 hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-white/40"
+                aria-label="Previous page"
+              >
+                <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5 transition-transform duration-200 ease-out">
+                  <path
+                    d="M15 19l-7-7 7-7"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+            )}
+
+            {currentPage < totalPages - 1 && (
+              <button
+                type="button"
+                onClick={goNext}
+                className="absolute bottom-4 -right-14 translate-x-[10px] h-11 w-11 rounded-full bg-black text-white shadow backdrop-blur flex items-center justify-center transform transition-all duration-300 ease-out hover:scale-110 hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-white/40"
+                aria-label="Next page"
+              >
+                <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5 transition-transform duration-200 ease-out">
+                  <path
+                    d="M9 5l7 7-7 7"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+            )}
+
+            <div className="mt-4 flex items-center justify-center gap-2 text-sm text-muted-foreground">
+              <span>{`${currentPage + 1} / ${totalPages} (총 ${totalCount}개 스터디)`}</span>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
