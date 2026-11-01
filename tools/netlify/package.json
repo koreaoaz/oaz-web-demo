@@ -1,0 +1,8 @@
+{
+  "name": "oaz-demo-netlify-tool",
+  "private": true,
+  "version": "1.0.0",
+  "devDependencies": {
+    "netlify-cli": "27.16.1"
+  }
+}
