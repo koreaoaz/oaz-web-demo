@@ -2,7 +2,7 @@
 . $Library
 $script:root = Split-Path -Parent (Split-Path -Parent $Library)
 $script:sha = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-$script:id = '12345678-1234-1234-1234-123456789abc'
+$script:id = '2f66ba08-2dd6-4b5d-9156-8c1ad5fd54ad'
 $script:cases = 0
 function Assert-Test([bool]$Condition, [string]$Message) { if (-not $Condition) { throw $Message }; $script:cases++ }
 
@@ -24,6 +24,7 @@ if ($env:OS -eq 'Windows_NT') {
     [IO.File]::WriteAllText((Join-Path $firstDirectory 'oaz-path-probe.cmd'), "@echo first`r`n", [Text.Encoding]::ASCII)
     [IO.File]::WriteAllText((Join-Path $secondDirectory 'oaz-path-probe.cmd'), "@echo second`r`n", [Text.Encoding]::ASCII)
     [IO.File]::WriteAllText((Join-Path $firstDirectory 'oaz-stderr-probe.cmd'), "@echo fixture_secret_value 1>&2`r`n@exit /b 7`r`n", [Text.Encoding]::ASCII)
+    [IO.File]::WriteAllText((Join-Path $firstDirectory 'oaz-context-probe.cmd'), "@echo --context flag is only available when using the --build flag 1>&2`r`n@echo fixture_secret_value 1>&2`r`n@exit /b 1`r`n", [Text.Encoding]::ASCII)
     [IO.File]::WriteAllBytes((Join-Path $firstDirectory 'oaz-invalid-probe.exe'), [byte[]](0, 1, 2))
     $env:Path = "$firstDirectory;$secondDirectory;$originalPath"
     Assert-Test (@(Get-Command oaz-path-probe.cmd -CommandType Application).Count -ge 2) '중복 PATH 재현'
@@ -34,6 +35,11 @@ if ($env:OS -eq 'Windows_NT') {
       $failed = $_.Exception.Message -match '종료 코드: 7' -and $_.Exception.Message -notmatch 'fixture_secret_value'
     }
     Assert-Test $failed '종료 코드 확인 및 stderr 비노출'
+    $failed = $false
+    try { Invoke-DemoCommand 'oaz-context-probe.cmd' @() '승인된 기존 Demo 사이트 배포' } catch {
+      $failed = $_.Exception.Message -match 'context' -and $_.Exception.Message -notmatch 'fixture_secret_value'
+    }
+    Assert-Test $failed '알려진 인수 충돌을 안내하고 stderr 원문은 숨김'
     $failed = $false
     try { Invoke-DemoCommand 'oaz-invalid-probe.exe' @() '가짜 실행 오류' } catch {
       $failed = $_.Exception.Message -match '^가짜 실행 오류 실행에 실패했습니다\. 오류 종류: [A-Za-z0-9_]+$' -and $_.Exception.Message -notmatch 'oaz-invalid-probe'
@@ -89,7 +95,8 @@ function Invoke-DemoCommand([string]$Command, [string[]]$Arguments, [string]$Lab
     if ($script:scenario -eq 'bad-json') { return '{invalid' }
     $siteName = 'oneandzero-demo'; $siteUrl = 'https://oneandzero-demo.netlify.app'; $siteId = $script:id
     if ($script:scenario -eq 'bad-site') { $siteName = 'other' }
-    if ($script:scenario -eq 'bad-id') { $siteId = '------------------------------------' }
+    if ($script:scenario -eq 'bad-id') { $siteId = '12345678-1234-1234-1234-123456789abc' }
+    if ($script:scenario -eq 'auth-failure') { throw '모의 인증 실패' }
     if ($script:scenario -eq 'bad-site-url') { $siteUrl = 'https://other.netlify.app' }
     if ($script:scenario -eq 'site-changed' -and $script:approved) { $siteId = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb' }
     return (@{loggedIn=$true; linked=$true; siteData=@{'site-name'=$siteName; 'site-url'=$siteUrl; 'site-id'=$siteId}} | ConvertTo-Json -Compress)
@@ -116,12 +123,13 @@ try {
     Invoke-DemoDeployment $script:root -Production:$production
     Assert-Test ($script:deployArgs -contains '--no-build') '검증된 산출물만 배포'
     Assert-Test (($script:deployArgs -contains '--prod') -eq $production) 'Draft와 Production 분리'
-    Assert-Test ($script:deployArgs[5] -eq $script:id) '기존 사이트 ID 지정'
-    Assert-Test ($script:deployArgs[7] -match $script:sha) '전체 SHA 기록'
+    Assert-Test ($script:deployArgs[3] -eq $script:id) '기존 사이트 ID 지정'
+    Assert-Test (-not ($script:deployArgs -contains '--context')) '빌드 생략 시 context 금지'
+    Assert-Test ($script:deployArgs[5] -match $script:sha) '전체 SHA 기록'
     Assert-Test ($script:prompt -ceq (Get-DemoApprovalMessage $production)) '실제 승인 프롬프트'
     Assert-Test (@($script:calls | Where-Object { $_ -match 'ls-remote' }).Count -eq 3) '검증 전후 및 승인 후 원격 SHA 조회'
   }
-  foreach ($scenario in @('cancel','wrong-approval','node-low','wrong-root','wrong-branch','dirty','wrong-origin','wrong-push','remote-changed','changed-after-approval','bad-json','bad-site','bad-id','bad-site-url','site-changed','production-url','secret-key','scope-mismatch','missing-env','command-failure','fail-cli-install','fail-install','fail-types','fail-tests','fail-build')) {
+  foreach ($scenario in @('cancel','wrong-approval','node-low','wrong-root','wrong-branch','dirty','wrong-origin','wrong-push','remote-changed','changed-after-approval','bad-json','auth-failure','bad-site','bad-id','bad-site-url','site-changed','production-url','secret-key','scope-mismatch','missing-env','command-failure','fail-cli-install','fail-install','fail-types','fail-tests','fail-build')) {
     Reset-Mock $scenario; $failed = $false
     try { Invoke-DemoDeployment $script:root -Production } catch { $failed = $true; if ($scenario -eq 'cancel') { Assert-Test ($_.Exception.Message -ceq '명시적인 배포 승인이 없어 중단했습니다.') '한글 취소 안내' } }
     Assert-Test $failed "안전 차단 $scenario"

@@ -16,5 +16,8 @@ test('배포 스크립트는 기존 Demo 사이트와 명시적 SHA 승인을 �
   assert.match(verify, /'ls-remote','--exit-code','origin','refs\/heads\/main'/);
   assert.match(deploy, /Read-Host[\s\S]+?-cne \$verified.Sha/);
   assert.match(deploy, /'--site',\$verified.SiteId/);
+  assert.match(verify, /2f66ba08-2dd6-4b5d-9156-8c1ad5fd54ad/);
+  assert.match(deploy, /'deploy','--no-build','--site',\$verified.SiteId/);
+  assert.doesNotMatch(deploy, /'deploy','--no-build','--context'/);
   assert.doesNotMatch(deploy, /--create-site|--allow-anonymous|--site-name/);
 });

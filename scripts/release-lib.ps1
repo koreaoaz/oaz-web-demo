@@ -20,7 +20,12 @@ function Invoke-DemoCommand([string]$Command, [string[]]$Arguments, [string]$Lab
     $errorType = $_.Exception.GetType().Name -replace '[^A-Za-z0-9_]', ''
     throw "$Label 실행에 실패했습니다. 오류 종류: $errorType"
   } finally { $ErrorActionPreference = $savedPreference }
-  if ($code -ne 0) { throw "$Label 검사에 실패했습니다. 종료 코드: $code" }
+  if ($code -ne 0) {
+    if ($Label -ceq '승인된 기존 Demo 사이트 배포' -and ($lines -join "`n") -match '--context flag is only available when using the --build flag') {
+      throw "$Label 검사에 실패했습니다. 빌드 생략과 context 인수가 충돌합니다. 종료 코드: $code"
+    }
+    throw "$Label 검사에 실패했습니다. 종료 코드: $code"
+  }
   if ($Capture) { return ($lines -join "`n").Trim() }
   Write-Host "$Label 완료"
 }
@@ -42,7 +47,7 @@ function Get-DemoGitState([string]$Root) {
 function Get-DemoSite([string]$Cli) {
   try { $status = (Invoke-DemoCommand $Cli @('status','--json') 'Netlify 사이트' -Capture) | ConvertFrom-Json
     $id = [string]$status.siteData.'site-id'
-    if (-not $status.loggedIn -or -not $status.linked -or $status.siteData.'site-name' -cne 'oneandzero-demo' -or $status.siteData.'site-url' -cne 'https://oneandzero-demo.netlify.app' -or $id -notmatch '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$') { throw 'invalid' }
+    if (-not $status.loggedIn -or -not $status.linked -or $status.siteData.'site-name' -cne 'oneandzero-demo' -or $status.siteData.'site-url' -cne 'https://oneandzero-demo.netlify.app' -or $id -cne '2f66ba08-2dd6-4b5d-9156-8c1ad5fd54ad') { throw 'invalid' }
   } catch { throw 'Netlify 로그인 및 기존 oneandzero-demo 사이트 연결을 확인하세요.' }
   return $id
 }
@@ -116,7 +121,7 @@ function Invoke-DemoDeployment([string]$Root, [switch]$Production) {
     if ((Get-DemoGitState $Root) -cne $verified.Sha -or (Get-DemoSite $verified.Cli) -cne $verified.SiteId) { throw '승인 이후 커밋 또는 사이트가 변경됐습니다.' }
     $null = Get-DemoBuildEnvironment $verified.Cli
     $mode = 'draft'; if ($Production) { $mode = 'production' }
-    $arguments = @('deploy','--no-build','--context','production','--site',$verified.SiteId,'--message',"Demo $mode $($verified.Sha)")
+    $arguments = @('deploy','--no-build','--site',$verified.SiteId,'--message',"Demo $mode $($verified.Sha)")
     if ($Production) { $arguments += '--prod' }
     Invoke-DemoCommand $verified.Cli $arguments '승인된 기존 Demo 사이트 배포'
     Write-Host "Netlify Deploys에서 사이트와 배포 커밋을 확인하세요: $($verified.Sha)"
