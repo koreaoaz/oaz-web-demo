@@ -17,12 +17,14 @@ ALTER TABLE public.demo_visit_throttle ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.demo_visit_ledger, public.demo_visit_throttle FROM PUBLIC, anon, authenticated, service_role;
 CREATE FUNCTION public.demo_visit_record(p_digest text) RETURNS integer
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $fn$
-DECLARE d date := (pg_catalog.now() AT TIME ZONE 'Asia/Seoul')::date;
+DECLARE d date;
         m timestamptz; daily_digest text;
         n integer; minute_n integer; request_n integer;
 BEGIN
   IF p_digest IS NULL OR p_digest !~ '^[a-f0-9]{64}$' THEN RAISE EXCEPTION 'invalid digest'; END IF;
   PERFORM pg_catalog.pg_advisory_xact_lock(719443281);
+  -- 대기 중 한국 자정이 지나도 잠금 획득 시점의 날짜에 기록한다.
+  d := (pg_catalog.clock_timestamp() AT TIME ZONE 'Asia/Seoul')::date;
   m := pg_catalog.date_trunc('minute',pg_catalog.clock_timestamp());
   INSERT INTO public.demo_visit_throttle(id,minute_at,minute_count,request_count) VALUES(1,m,0,0)
     ON CONFLICT(id) DO UPDATE SET minute_count=CASE WHEN public.demo_visit_throttle.minute_at=excluded.minute_at THEN public.demo_visit_throttle.minute_count ELSE 0 END, request_count=CASE WHEN public.demo_visit_throttle.minute_at=excluded.minute_at THEN public.demo_visit_throttle.request_count ELSE 0 END, minute_at=excluded.minute_at;
@@ -49,7 +51,7 @@ BEGIN
   SELECT request_count INTO requests FROM public.demo_visit_throttle WHERE id=1;
   IF requests >= 120 THEN RETURN -1; END IF;
   UPDATE public.demo_visit_throttle SET request_count=request_count+1 WHERE id=1;
-  SELECT count(*)::integer INTO n FROM public.demo_visit_ledger WHERE visit_day=(pg_catalog.now() AT TIME ZONE 'Asia/Seoul')::date;
+  SELECT count(*)::integer INTO n FROM public.demo_visit_ledger WHERE visit_day=(pg_catalog.clock_timestamp() AT TIME ZONE 'Asia/Seoul')::date;
   RETURN n;
 END; $fn$;
 REVOKE ALL ON FUNCTION public.demo_visit_record(text) FROM PUBLIC, anon, authenticated, service_role;
