@@ -1,5 +1,7 @@
 # Demo 환경변수 점검
 
+> 아래 방문자 키 설명은 과거 이력이다. 방문자 기능은 차단됐으며 어떤 service_role 키도 설정하지 않는다. 현재 절차는 `DEMO_FINAL_RELEASE_RUNBOOK.md`를 따른다.
+
 이 폴더는 Demo 프로젝트 `ctbwaqtqubmjmltbxfzm` 전용이다. 값은 `.env.example`을 참고하여 각자 로컬 `.env.local` 또는 Netlify 환경변수에 직접 입력한다. `.env.local`과 실제 키는 Git에 넣지 않는다.
 
 - `NEXT_PUBLIC_SUPABASE_URL`: 정확히 `https://ctbwaqtqubmjmltbxfzm.supabase.co`. 빌드 및 서버 실행에서 필수다. 다른 호스트·프로토콜·포트·경로는 거부한다.

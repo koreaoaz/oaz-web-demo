@@ -25,8 +25,8 @@ export function EventForm() {
           uploadImage("card_news", file)
         )
       )
-    } catch (err) {
-      console.error("이미지 업로드 실패:", err)
+    } catch {
+      console.error("이미지 업로드 실패")
       alert("이미지 업로드 실패")
       return
     }

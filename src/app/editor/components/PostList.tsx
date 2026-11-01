@@ -9,7 +9,7 @@ import { deletePost, fetchPosts, updatePost} from "../services/board.service"
 import { ImageFromStorage } from "./ImageFromStorage"
 import { cx } from "../utils/cx"
 import { getFirstImageFilename } from "../utils/parsing_first"
-import * as XLSX from "xlsx"
+import writeExcelFile from "write-excel-file/browser"
 
 type Props<B extends BoardType> = {
   board: B
@@ -91,19 +91,10 @@ export function PostList<B extends BoardType>({ board, posts, setPosts, reload, 
     try {
     const data = await fetchPosts(BOARD_TABLE_MAP[board])
 
-    const formatted = data.map((row: EditorTextFields) => {
-      const obj: Record<string, unknown> = {}
-      BOARD_COLUMNS[board].forEach((col) => {
-        obj[col.label] = row[col.field]
-      })
-      return obj
-    })
-
-    const worksheet = XLSX.utils.json_to_sheet(formatted)
-    const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, board)
-
-    XLSX.writeFile(workbook, `${board}.xlsx`)
+    const columns = BOARD_COLUMNS[board]
+    const rows = [columns.map((column) => column.label), ...data.map((row: EditorTextFields) =>
+      columns.map((column) => row[column.field] ?? null))]
+    await writeExcelFile(rows, { sheet: board, dateFormat: "yyyy-mm-dd" }).toFile(`${board}.xlsx`)
     } catch {
       alert("엑셀 데이터를 불러오지 못했습니다. 다시 시도해 주세요.")
     }
@@ -127,8 +118,8 @@ export function PostList<B extends BoardType>({ board, posts, setPosts, reload, 
 
       setEditingCell(null)
       reload()
-    } catch (err) {
-      console.error("Update error:", err)
+    } catch {
+      console.error("게시글 수정 실패")
       alert("업데이트 실패")
     }
   }

@@ -7,7 +7,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
-import * as XLSX from 'xlsx';
+import writeExcelFile from 'write-excel-file/node';
+import readExcelFile, { readSheetNames } from 'read-excel-file/node';
 
 // 실제 소스를 분리해 실행한다. 허용하지 않은 import와 네트워크는 항상 차단한다.
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
@@ -216,25 +217,24 @@ test('9단계: Excel의 열 순서·숫자·선행0·빈값·날짜를 메모리
     { name: '날짜검증', student_id: '0000', department: '가상', generation: new Date('2026-10-31T00:00:00Z'), email: '', phone_number: '' },
   ];
   const captured = [];
+  const board = String.fromCharCode(46321, 47197, 54924, 50896);
   const { download } = isolated(`const BOARD_COLUMNS = ${arrow(path, 'BOARD_COLUMNS')};
     export const download = ${arrow(path, 'handleExcelDownload')}`, {
-    board: '등록회원', BOARD_TABLE_MAP: { 등록회원: 'mock_members' },
+    board, BOARD_TABLE_MAP: { [board]: 'mock_members' },
     fetchPosts: async (table) => { assert.equal(table, 'mock_members'); return rows; },
-    XLSX: { utils: XLSX.utils, writeFile: (workbook, name) => captured.push({ workbook, name }) },
+    writeExcelFile: (data, options) => ({ toFile: async (name) => captured.push({ data, options, name }) }),
   });
   await download();
   assert.equal(captured.length, 1);
-  assert.equal(captured[0].name, '등록회원.xlsx');
-  const buffer = XLSX.write(captured[0].workbook, { bookType: 'xlsx', type: 'buffer' });
-  const workbook = XLSX.read(buffer, { type: 'buffer' });
-  assert.deepEqual(workbook.SheetNames, ['등록회원']);
-  const sheet = workbook.Sheets['등록회원'];
-  assert.deepEqual(XLSX.utils.sheet_to_json(sheet, { header: 1 })[0], ['이름', '학번', '학과', '기수', '이메일', '전화번호']);
-  assert.equal(sheet.B2.v, '0012'); assert.equal(sheet.B2.t, 's');
-  assert.equal(sheet.B3.v, 12); assert.equal(sheet.B3.t, 'n');
-  assert.equal(sheet.C3.v, ''); assert.equal(sheet.D2.v, 0);
-  assert.equal(sheet.D4.t, 'n');
-  assert.equal(sheet.D4.v, captured[0].workbook.Sheets['등록회원'].D4.v);
+  assert.equal(captured[0].name, `${board}.xlsx`);
+  const buffer = await writeExcelFile(captured[0].data, captured[0].options).toBuffer();
+  const sheet = await readExcelFile(buffer);
+  assert.deepEqual(await readSheetNames(buffer), [board]);
+  assert.equal(sheet[0].length, 6);
+  assert.equal(sheet[1][1], '0012');
+  assert.equal(sheet[2][1], 12);
+  assert.equal(sheet[1][3], 0);
+  assert.equal(sheet[3][3] instanceof Date, true);
 });
 
 for (const scenario of [
@@ -593,7 +593,7 @@ for (const [board, row] of [
       './ImageFromStorage': { ImageFromStorage: 'MockImage' },
       '../utils/cx': { cx: (...values) => values.filter(Boolean).join(' ') },
       '../utils/parsing_first': parser,
-      xlsx: { utils: XLSX.utils, writeFile: (workbook, name) => downloads.push({ workbook, name }) },
+      'write-excel-file/browser': { __esModule: true, default: (rows, options) => ({ toFile: async (name) => downloads.push({ rows, options, name }) }) },
     }, { confirm: () => confirmed, alert: () => assert.fail('정상 모의 요청은 실패하지 않는다') });
     const props = { board, posts: [row], loading: false, reload: () => reloads++, setPosts: () => assert.fail('편집/삭제는 직접 목록을 교체하지 않는다') };
     let output = h.render(props);
@@ -619,7 +619,7 @@ for (const [board, row] of [
     if (board === '등록회원') {
       await exportButton.props.onClick();
       assert.equal(downloads.length, 1); assert.equal(downloads[0].name, '등록회원.xlsx');
-      assert.equal(downloads[0].workbook.Sheets['등록회원'].B2.v, '0012');
+      assert.equal(downloads[0].rows[1][1], '0012');
     } else assert.equal(exportButton, undefined);
     h.unmount();
   });

@@ -1,0 +1,56 @@
+name: Demo CI 검증
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: 회귀 테스트 및 빌드
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://ctbwaqtqubmjmltbxfzm.supabase.co
+      NEXT_PUBLIC_SUPABASE_KEY: sb_publishable_ci_placeholder
+      NEXT_TELEMETRY_DISABLED: '1'
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: 브라우저 테스트 실행 조건 확인
+        shell: pwsh
+        run: |
+          if (-not ((Test-Path 'C:/Program Files/Google/Chrome/Application/chrome.exe') -or (Test-Path 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'))) { throw '브라우저 회귀 테스트를 실행할 수 없습니다.' }
+          Get-Command powershell.exe -ErrorAction Stop | Out-Null
+          Get-Command pwsh.exe -ErrorAction Stop | Out-Null
+      - run: npx tsc --noEmit
+      - run: npm run lint
+      - run: node --test --test-concurrency=1 tests/*.test.mjs
+      - run: npm run build
+      - name: 검증 커밋 기록
+        run: echo "검증 커밋 $env:GITHUB_SHA"
+
+  postgres:
+    name: 격리 PostgreSQL 보안 및 방문자 SQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: PostgreSQL 로컬 도구 설치
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql
+      - run: python3 tests/postgres-harness.test.py
+      - run: python3 tests/demo-role-db.test.py
+      - run: python3 tests/visitor-db.test.py

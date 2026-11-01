@@ -48,7 +48,7 @@ const EMPTY_STUDIES: Study[] = []
 
           // Check for required fields
           if (!item.start_time || !item.end_time || !item.study_name) {
-            console.warn("[v0] Missing required data for item:", item)
+            console.warn("시간표의 필수 정보가 누락되었습니다.")
             return
           }
 
@@ -56,7 +56,7 @@ const EMPTY_STUDIES: Study[] = []
           const endParts = item.end_time.split(" ")
 
           if (startParts.length < 2 || endParts.length < 2) {
-            console.warn("[v0] Invalid time format for item:", item)
+            console.warn("시간표의 시간 형식이 올바르지 않습니다.")
             return
           }
 
@@ -67,7 +67,7 @@ const EMPTY_STUDIES: Study[] = []
           // Create unique identifier to prevent duplicates
           const studyKey = `${item.study_name}-${item.leader}-${day}-${startTime}-${endTime}`
           if (seenStudies.has(studyKey)) {
-            console.warn("[v0] Duplicate study detected, skipping:", studyKey)
+            console.warn("중복된 시간표 항목을 건너뜁니다.")
             return
           }
           seenStudies.add(studyKey)
