@@ -43,3 +43,5 @@ next-env.d.ts
 !.env.example
 .netlify/
 /tools/netlify/node_modules/
+__pycache__/
+*.pyc

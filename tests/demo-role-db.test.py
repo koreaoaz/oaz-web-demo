@@ -1,55 +1,25 @@
-"""가짜 데이터와 로컬 임시 PostgreSQL에서 참고 RLS SQL을 검증한다.
-
-실제 Supabase와 Auth/Storage API를 재현하거나 원격 정책을 검증하지 않는다.
-"""
-import os
-import secrets
-import socket
-import subprocess
-import tempfile
-import time
+"""격리된 가짜 Auth/Storage 검사이며 실제 Supabase 통합 검사가 아니다."""
+import sys
 from pathlib import Path
-
+from helpers.local_postgres import LocalPostgres, PostgreSQLUnavailable
 ROOT = Path(__file__).resolve().parents[1]
-BIN = Path(r"C:\Users\yjcha\OAZ-Workspace\OAZ_150_LOCAL_TEST_z5sboum1\portable\bin")
-RUN = Path(tempfile.mkdtemp(prefix="oaz_role_fixture_"))
-DATA = RUN / "data"
-with socket.socket() as probe:
-    probe.bind(("127.0.0.1", 0))
-    PORT = probe.getsockname()[1]
-ENV = {k: v for k, v in os.environ.items() if not k.upper().startswith("PG")}
-ENV["PGCLIENTENCODING"] = "UTF8"
-ENV["PGPASSWORD"] = secrets.token_hex(32)
-PSQL = [str(BIN / "psql.exe"), "-X", "-h", "127.0.0.1", "-p", str(PORT), "-U", "fixture", "-d", "postgres", "-w", "-qAt", "-v", "ON_ERROR_STOP=1"]
-
 
 def query(sql, succeeds=True):
-    result = subprocess.run(PSQL, input=sql, text=True, encoding="utf-8", capture_output=True, env=ENV, timeout=60)
-    if succeeds and result.returncode:
-        raise AssertionError("가짜 로컬 SQL 테스트 실패: " + repr(sql) + " / " + result.stderr[-1000:])
+    result = pg.query(sql, ok=succeeds)
     if not succeeds and not result.returncode:
-        raise AssertionError("예상한 권한 거부가 발생하지 않음")
+        raise AssertionError("예상한 권한 거부가 발생하지 않았습니다.")
     return result.stdout.strip()
-
 
 def actor(role, uid, sql, succeeds=True):
     return query(f"BEGIN; SET LOCAL ROLE {role}; SET LOCAL request.jwt.claim.sub = '{uid}'; {sql}; ROLLBACK;", succeeds)
 
 
-started = False
 try:
-    password_file = RUN / "temporary-password"
-    try:
-        password_file.write_text(ENV["PGPASSWORD"] + "\n", encoding="ascii")
-        init = subprocess.run([str(BIN / "initdb.exe"), "-D", str(DATA), "-U", "fixture", "--auth=scram-sha-256", "--pwfile", str(password_file), "--no-locale", "--encoding=UTF8"], capture_output=True, env=ENV, timeout=120)
-    finally:
-        password_file.unlink(missing_ok=True)
-    if init.returncode:
-        raise RuntimeError("로컬 PostgreSQL 초기화 실패")
-    start = subprocess.run([str(BIN / "pg_ctl.exe"), "-D", str(DATA), "-l", str(RUN / "server.log"), "-o", f"-h 127.0.0.1 -p {PORT}", "-w", "start"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=ENV, timeout=120, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-    if start.returncode:
-        raise RuntimeError("로컬 PostgreSQL 시작 실패")
-    started = True
+    pg = LocalPostgres().__enter__()
+except PostgreSQLUnavailable as error:
+    print(error)
+    sys.exit(77)
+try:
     query("CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS;")
     query("""CREATE SCHEMA auth; CREATE SCHEMA storage;
       CREATE TABLE auth.users(id uuid PRIMARY KEY,email text,email_confirmed_at timestamptz);
@@ -126,8 +96,4 @@ try:
     actor('authenticated', admin, "INSERT INTO storage.objects VALUES ('project_img','../escape.png')", False)
     print('PASS: 로컬 GRANT/RLS 역할별 콘텐츠·회원·관리자·Storage 검사')
 finally:
-    if started:
-        stop = subprocess.run([str(BIN / 'pg_ctl.exe'), '-D', str(DATA), '-m', 'fast', '-w', 'stop'], capture_output=True, env=ENV, timeout=120, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
-        if stop.returncode:
-            raise RuntimeError('임시 PostgreSQL 종료 실패')
-        print('임시 PostgreSQL 종료')
+    pg.cleanup()

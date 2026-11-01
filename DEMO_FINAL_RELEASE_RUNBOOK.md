@@ -14,19 +14,21 @@
 
 ## 1. 사전 준비와 PR 병합
 
-학회 계정이 PR #1의 변경·CI를 검토하고 실제 배포 및 DB 미변경 상태를 확인한다. 기존 Netlify Git 빌드가 켜져 있으면 `main` 병합이 기존 Production 배포를 유발할 수 있다. 학회가 이를 승인하고 적절한 중지 시점을 결정하기 전에는 병합하지 않는다. 기존 배포의 정상 SHA와 Netlify Deploy ID를 기록한다. PR은 학회가 직접 병합하며 강제 push나 이력 재작성은 하지 않는다.
+학회 계정이 PR #1의 변경·CI를 검토하고 실제 배포 및 DB 미변경 상태를 확인한다. 사용자 확인에 따르면 현재 Netlify Git 빌드는 **Stopped builds**다. 이 상태와 Git 연결을 유지한다. Git 빌드가 다시 켜지면 `main` 병합이 Production 배포를 유발할 수 있으므로 먼저 확인한다. 기존 배포의 정상 SHA와 Netlify Deploy ID를 기록한다. PR은 학회가 직접 병합하며 강제 push나 이력 재작성은 하지 않는다.
 
 병합 후 Demo 저장소에서 `git switch main`, `git pull --ff-only`로 학회가 승인한 main을 가져온다. 원격 주소가 `https://github.com/koreaoaz/oaz-web-demo.git`인지 확인한다. 스크립트는 깨끗한 `main`과 원격 SHA 일치를 요구한다. 공식 저장소에서 실행하지 않는다.
 
 ## 2. Netlify 최초 인증과 연결
 
-Node 22를 설치하고 Demo 폴더의 PowerShell에서 `npm ci --prefix tools/netlify`를 실행한다. 고정된 CLI로 `./tools/netlify/node_modules/.bin/netlify.cmd login`을 실행하고 브라우저에서 학회 Netlify 계정으로 인증한다. `./tools/netlify/node_modules/.bin/netlify.cmd link`로 **기존** `oneandzero-demo`를 선택한다. 새 사이트 생성은 선택하지 않는다. 개인 계정이나 다른 팀을 선택하지 않는다.
+안정 Node **22.13.0 이상, 23 미만**을 설치하고 Demo 폴더의 PowerShell에서 `npm ci --prefix tools/netlify`를 실행한다. Node 20·23·24 및 prerelease는 지원 범위 밖이다. package.json과 두 lockfile의 루트 engines가 같은 범위를 선언한다. CLI는 27.16.1로 고정하며 최소 22.13.0이 필요하다. GitHub Actions와 Netlify의 `22` 설정은 이 범위의 최신 안정 22를 선택한다. 고정된 CLI로 `./tools/netlify/node_modules/.bin/netlify.cmd login`을 실행하고 브라우저에서 학회 Netlify 계정으로 인증한다. `./tools/netlify/node_modules/.bin/netlify.cmd link`로 **기존** `oneandzero-demo`를 선택한다. 새 사이트 생성은 선택하지 않는다. 개인 계정이나 다른 팀을 선택하지 않는다.
 
 Netlify 프로젝트의 환경변수에 Demo 전용 `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_KEY`를 Build 및 Functions에 설정한다. 값은 채팅·소스·로그에 남기지 않는다. `DEMO_VISITOR_SERVICE_KEY`와 `DEMO_VISITOR_HMAC_KEY`를 등록하거나 변경하지 않는다. 이미 존재하면 학회 관리자가 별도 승인 후 비활성화 여부를 확인한다. OAuth에는 실제 사이트와 Draft 리다이렉트가 허용되어야 한다.
 
 ## 3. 검증과 Draft
 
-`powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-release.ps1`은 연결된 사이트 이름·주소, Node 22, 깨끗한 main, 원격 SHA를 확인하고 `npm ci`, 타입·lint·전체 테스트, Netlify production 문맥 빌드를 실행한다. 인증 정보를 GitHub Secret에 넣지 않는다. 오류가 발생하면 배포하지 않는다.
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-release.ps1`은 연결된 사이트 이름·주소·UUID, Node 범위, 저장소 루트, fetch/push 원격, 깨끗한 main, 실제 원격 main SHA를 확인하고 `npm ci`, 타입·lint·전체 테스트, Netlify production 문맥 빌드를 실행한다. `pwsh -NoProfile -File .\scripts\verify-release.ps1`도 지원한다. 모든 PS1의 UTF-8 BOM을 유지한다(Windows PowerShell 5.1의 한글 해석에 필요). CRLF와 LF 모두 회귀 검사한다. 인증 정보를 GitHub Secret에 넣지 않는다. 오류가 발생하면 배포하지 않는다.
+
+스크립트는 연결된 사이트의 공개 환경변수 두 개만 `env:get --json`으로 메모리에 읽으며 값을 표시하거나 저장하지 않는다. production의 builds/functions 양쪽 값이 일치하고 Demo URL 및 공개키 형식인지 검사한다. 로컬 환경변수와 충돌하거나 값이 없으면 중단한다. process 환경변수는 빌드 후 원복한다. `NETLIFY_AUTH_TOKEN`/`NETLIFY_SITE_ID` 환경변수로 대상이나 인증을 덮어쓰는 실행은 거부한다. CLI 로컬 로그인과 기존 사이트 link를 사용한다. 모의 키로 만든 오프라인 산출물을 그대로 배포하지 말고 이 재빌드 경로를 사용한다.
 
 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\deploy-release.ps1`은 위 검증을 다시 실행한 뒤 표시된 전체 SHA를 직접 입력받아 동일 산출물을 Draft로 배포한다. 호출 자체를 자동 승인으로 취급하지 않는다. 공개될 수 있는 Draft에는 가짜 데이터만 사용한다. Netlify Deploys에서 SHA와 Draft 주소를 확인한다. SSR 페이지, API Route, Demo Supabase 연결, GitHub OAuth, 공개 이미지·Storage, Editor CRUD 및 Excel을 점검한다. 방문자 API는 503이어야 한다.
 
@@ -42,7 +44,31 @@ Netlify 프로젝트의 환경변수에 Demo 전용 `NEXT_PUBLIC_SUPABASE_URL`, 
 
 동일 SHA의 Draft와 역할별 검사를 통과한 뒤 학회가 별도 승인한 경우에만 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\deploy-release.ps1 -Production`을 실행한다. 스크립트는 재검증·재빌드 후 전체 SHA 입력을 요구한다. Netlify Deploys의 대상 사이트·메시지 SHA·상태를 확인하고 실제 페이지와 API를 다시 확인한다. 이 입력은 학회의 Draft 검증을 기술적으로 증명하지 않으므로 학회가 결과를 따로 기록해야 한다.
 
-배포 실패 또는 회귀 시 Netlify **Deploys → 이전 정상 배포 → Publish deploy**로 승인된 이전 배포를 복원하고 SHA와 동작을 확인한다. Git 자동 배포가 켜져 있으면 이후 push가 복구 상태를 다시 덮을 수 있다. CLI Draft 성공과 학회 승인 이후에만 **Project configuration → Developer settings → Continuous deployment → Build settings → Configure → Build status → Stopped builds**로 Git 빌드를 중지한다. 이 설정은 Netlify의 모든 Git 기반 빌드도 중지한다. CLI 수동 배포는 별도다.
+배포 실패 시 스크립트는 성공을 표시하거나 자동 재시도하지 않는다. 실패 단계명과 종료 코드를 확인한다. 인증/환경변수 응답 원문을 로그에 복사하지 않는다. 미완성 배포를 승인하지 말고 사이트·산출물·SHA를 재검증한다. Production 회귀 시 Netlify **Deploys → 이전 정상 배포 → Publish deploy**로 학회가 승인한 이전 배포를 복원하고 SHA와 동작을 확인한다. Git 자동 배포가 켜져 있으면 이후 push가 복구 상태를 다시 덮을 수 있다. 현재 **Stopped builds**는 그대로 유지한다. 이 설정은 Git 기반 빌드를 중지하며 CLI 수동 배포는 별도다. 이번 수정에서는 배포나 설정 변경을 하지 않았다.
+
+## 6. 배포하지 않는 로컬 회귀 검사
+
+- `node --test --test-concurrency=1 tests/*.test.mjs`: 실제 PowerShell 5.1/7 프로세스에서 LF/CRLF 라이브러리와 한글 승인/취소 문구, Node 경계값, 잘못된 저장소·사이트·환경변수·SHA, 검증 실패 즉시 중단을 검사한다. 모든 배포/Git/네트워크 명령은 가짜 응답이며 실제 deploy 요청은 없다. Windows CI는 두 PowerShell의 존재를 필수 확인한다. 로컬에서 pwsh가 PATH에 없으면 `OAZ_TEST_PWSH`에 실행 파일 경로를 지정한다. 미설치로 skip한 엔진은 통과로 간주하지 않는다.
+- `python tests/postgres-harness.test.py`: 설치 탐색, 명시 경로 오류, 미설치 구분, 외부 경로 정리 거부와 종료 후 삭제 순서를 서버 접속 없이 검사한다.
+- `python tests/demo-role-db.test.py`, `python tests/visitor-db.test.py`: `OAZ_TEST_PG_BIN` → PATH/pg_config → OS 설치 경로 순으로 탐색한다. 임시 디렉터리·임의 loopback 포트·무작위 로컬 인증정보만 쓰며 PG 외부 접속 환경변수를 무시한다. 테스트 종료/실패 시 서버 종료를 확인하고 생성한 임시 데이터와 로그를 지운다. 종료 확인 실패 시 파일을 보존하고 실패한다. PostgreSQL 미설치는 명확한 **SKIP/종료 코드 77**, 잘못 지정한 경로나 실제 실패는 비정상 종료다. CI는 도구를 설치하므로 77도 실패 처리한다. Linux는 root가 아닌 사용자로 실행한다. Windows와 Linux CI에서 각각 실행한다.
+- 격리 SQL 테스트는 가짜 auth/storage 테이블을 쓴다. 실제 Supabase 역할·Auth·Storage API 동작을 증명하지 않으며, 참고 SQL을 원격 DB에 적용하지 않는다. 방문자 기능은 통과 여부와 관계없이 BLOCKED다.
+
+## 7. PR 검사와 이전 Netlify 실패의 구분
+
+기준 커밋 `d07cc18c0875768b6c3188f40dc9bc888e6fe24b`의 GitHub Actions 회귀·빌드는 success다. Netlify Preview 및 Redirect rules / Header rules / Pages changed 실패 4건은 모두 Deploy ID `6ae6dd729b7f59699d3f150d`를 참조한다. 세 부가 검사는 같은 실패 배포 로그로 안내할 뿐이며 독립적인 규칙 오류 3건이 확인된 것은 아니다. 이번 API 읽기 시도로 상세 로그를 확보하지 못했으므로 **이번 배포의 정확한 실패 원인은 미확인**이다. 사용자가 이전 화면에서 확인한 `unrecognized Git contributor`를 이번 실패의 확정 원인으로 대체하지 않는다.
+
+GitHub branch protection 조회는 404, rulesets 조회는 403으로 필수 검사 설정을 확정할 수 없다. 학회가 Settings → Branches / Rules → Rulesets에서 확인한다. 현재 사용하지 않는 Netlify Git Preview의 과거 실패와 GitHub CI 실패는 구분한다. CLI 수동 배포 경로의 코드 병합과 실제 Draft/Production 승인도 별도다. GitHub에서 Netlify 상태 검사가 필수로 지정돼 있다면 학회가 정책을 검토해야 하며, 이 작업에서 규칙을 우회하거나 변경하지 않는다. 최종 커밋의 CI 결과와 정확한 SHA는 PR에 기록한다.
+
+### STEP 190-3 로컬 검증 결과
+
+- Node 22.23.4에서 자동 테스트 **144/144**, 실패·skip 0. TypeScript와 ESLint 통과. PowerShell 5.1 및 7.6.9 실제 프로세스의 LF/CRLF, 한글, 승인/취소, Node 경계값과 가짜 CLI 안전 차단 검사 통과.
+- Next.js 16.4.3 프로덕션 빌드, Netlify CLI 27.16.1의 production 문맥 **오프라인 빌드 및 SSR Functions 번들링** 통과. 모의 공개키만 사용했으므로 실제 배포 산출물로 승인하지 않는다.
+- PostgreSQL 17.11의 새 임시 인스턴스에서 역할별 GRANT/RLS, 방문자 중복·동시 요청·상한·원복·재적용 검사 통과. 두 인스턴스 모두 종료 및 파일 정리 완료. 탐색/정리 단위 검사 5개도 통과. Linux 검사는 추가한 GitHub CI 작업의 결과로 별도 확인한다.
+- 새 프로덕션 빌드로 loopback 서버를 실행해 홈페이지 200, 방문자 GET·정상 Origin POST 503, 교차 Origin POST 403을 확인했다. 설정 누락 및 운영 URL 입력 시 서버 실행 거부도 확인했다. 첫 검사에서 loopback 주소와 Origin을 다르게 준 403은 테스트 주소를 일치시켜 재검증했으며 API를 변경하지 않았다.
+- actionlint, `git diff --check` 통과. Git 업로드 대상 비밀정보 패턴 검사에서 탐지 없음. 실행하지 못한 실제 OAuth·역할별 RLS·Storage 통합 및 Netlify Draft/Production은 완료로 표시하지 않는다.
+- 로컬 기본 npm 런처는 시스템 Node 24를 사용해 최초 `npm ci`에서 engines 경고가 있었다. 설치는 성공했고, 이후 타입·lint·테스트·Next/Netlify 빌드는 Node 22 실행 파일과 PATH를 명시해 수행했다. 실제 릴리스에서는 지원 범위의 Node/npm 설치를 사용한다. CI도 Node 22에서 `npm ci`부터 실행한다. 개발/CLI 의존성의 기존 보통 등급 감사 항목은 위 현재 상태에 기록한 대로 남아 있다.
+
+인코딩 근거: [Microsoft PowerShell 문자 인코딩](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_character_encoding?view=powershell-5.1). Git 빌드 중지와 CLI 배포의 구분: [Netlify Stopped builds 문서](https://docs.netlify.com/build/configure-builds/stop-or-activate-builds/).
 
 ## 사용자가 직접 할 일
 
@@ -50,4 +76,4 @@ Netlify 프로젝트의 환경변수에 Demo 전용 `NEXT_PUBLIC_SUPABASE_URL`, 
 2. 학회 Netlify 로그인·기존 사이트 연결과 Demo 공개 환경변수 확인.
 3. 검증 스크립트 실행과 Draft 승인, 실제 OAuth·일반 회원·관리자 보안 테스트.
 4. 결과 기록 후 별도의 Production 승인 및 배포 SHA 확인.
-5. 필요 시 승인된 Git 빌드 중지 또는 이전 배포 복원.
+5. 기존 Git 빌드 중지 상태 유지, 필요 시 승인된 이전 배포 복원.
