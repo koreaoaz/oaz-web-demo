@@ -11,7 +11,7 @@ const eslintConfig = defineConfig([
       "@typescript-eslint/no-unused-expressions": "error",
     },
   },
-  globalIgnores([".next/**", "node_modules/**", "out/**", "build/**", "next-env.d.ts"]),
+  globalIgnores([".next/**", ".netlify/**", "node_modules/**", "tools/netlify/node_modules/**", "out/**", "build/**", "next-env.d.ts"]),
 ]);
 
 export default eslintConfig;

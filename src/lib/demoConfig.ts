@@ -11,12 +11,3 @@ export function validateDemoPublicConfig(url: string | undefined, key: string | 
     return { url, key };
   } catch { throw new Error("Demo 프로젝트의 공개 키만 사용할 수 있습니다."); }
 }
-
-export function validateDemoServerKey(key: string | undefined) {
-  if (!key) throw new Error("Demo 방문자 서버 키가 없습니다.");
-  try {
-    const payload = JSON.parse(atob(key.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
-    if (payload.role !== "service_role" || payload.ref !== DEMO_REF) throw new Error();
-    return key;
-  } catch { throw new Error("Demo 프로젝트의 서버 전용 키가 아닙니다."); }
-}

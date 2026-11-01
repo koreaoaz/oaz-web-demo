@@ -26,7 +26,7 @@ export function loadSource(file, mocks = {}, globals = {}) {
       cancelAnimationFrame: (id) => globalThis.window.cancelAnimationFrame(id), fetch: forbidden,
       require(name) {
         if (Object.hasOwn(mocks, name)) return mocks[name];
-        if (['react', 'react/jsx-runtime', 'clsx', 'date-fns', 'date-fns/locale', 'xlsx'].includes(name)) return require(name);
+        if (['react', 'react/jsx-runtime', 'clsx', 'date-fns', 'date-fns/locale', 'write-excel-file/browser'].includes(name)) return require(name);
         if (name.includes('supabaseClient')) throw new Error('Supabase는 모의 객체를 주입해야 한다');
         const resolved = name.startsWith('@/') ? path.join(base, 'src', name.slice(2)) : name.startsWith('.') ? path.resolve(path.dirname(filename), name) : null;
         if (!resolved) throw new Error(`허용하지 않은 모듈: ${name}`);

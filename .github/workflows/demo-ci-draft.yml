@@ -1,4 +1,4 @@
-name: Demo 검증 및 수동 Draft 배포
+name: Demo CI 검증
 
 on:
   pull_request:
@@ -35,40 +35,3 @@ jobs:
       - run: npm run build
       - name: 검증 커밋 기록
         run: echo "검증 커밋 $env:GITHUB_SHA"
-
-  draft:
-    name: 승인된 main의 수동 Draft 배포
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
-    needs: verify
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    environment: netlify-draft
-    env:
-      NETLIFY_SITE_ID: ${{ vars.NETLIFY_SITE_ID }}
-      NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_KEY }}
-      NEXT_TELEMETRY_DISABLED: '1'
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: '22'
-          cache: npm
-      - run: npm ci
-      - run: npm ci --prefix tools/netlify
-      - name: 기존 Demo 사이트 확인
-        env:
-          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-        run: node .github/scripts/verify-netlify-site.mjs
-      - name: Netlify Next.js 빌드
-        env:
-          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-        run: tools/netlify/node_modules/.bin/netlify build --context deploy-preview
-      - name: Draft 배포
-        env:
-          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-        run: tools/netlify/node_modules/.bin/netlify deploy --no-build --context deploy-preview --message "Demo draft $GITHUB_SHA"
-      - name: 배포 커밋 기록
-        run: echo "배포 커밋 $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"

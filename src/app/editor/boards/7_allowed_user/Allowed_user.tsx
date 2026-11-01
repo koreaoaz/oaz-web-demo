@@ -62,8 +62,8 @@ export function Allowed_user({
       setName("")
       setEmail("")
       onSuccess?.(newRow)
-    } catch (err: unknown) {
-      console.error(err)
+    } catch {
+      console.error("승인 이메일 등록 실패")
       setErrorMsg("등록에 실패했습니다.")
     } finally {
       setLoading(false)

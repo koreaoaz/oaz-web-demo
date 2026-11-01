@@ -14,7 +14,7 @@ test('Netlify 설정은 Next 빌드와 Node 버전을 지정하고 서버 비밀
 test('공개 환경변수 예시는 실제 키가 없고 방문자 키는 서버 전용 이름이다', () => {
   const example = readFileSync('.env.example', 'utf8');
   assert.match(example, /^NEXT_PUBLIC_SUPABASE_KEY=\s*$/m);
-  assert.match(example, /^DEMO_VISITOR_SERVICE_KEY=\s*$/m);
-  assert.match(example, /^DEMO_VISITOR_HMAC_KEY=\s*$/m);
+  assert.doesNotMatch(example, /^DEMO_VISITOR_SERVICE_KEY=/m);
+  assert.doesNotMatch(example, /^DEMO_VISITOR_HMAC_KEY=/m);
   assert.doesNotMatch(example, /^NEXT_PUBLIC_DEMO_VISITOR_/m);
 });

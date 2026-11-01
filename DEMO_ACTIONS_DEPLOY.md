@@ -1,5 +1,7 @@
 # Demo GitHub Actions 배포 절차
 
+> 이 문서는 STEP 185의 이력이다. 배포 토큰과 GitHub Actions 배포는 더 이상 사용하지 않는다. 현재 절차는 `DEMO_FINAL_RELEASE_RUNBOOK.md`를 따른다.
+
 이 구성은 PR 검증과 수동 Draft 배포를 분리한다. 프로덕션 자동 배포는 아직 없다. PR 코드는 배포 토큰을 사용하지 않는다. 수동 배포는 검토된 `main`에서만 실행하며, 기존 `oneandzero-demo` 사이트의 ID·이름·주소를 Netlify API로 확인한 뒤 CLI의 Draft 배포를 사용한다. 사이트를 생성하지 않는다. Draft URL도 외부에서 접근할 수 있으므로 테스트에는 가짜 정보만 사용한다.
 
 ## 최초 설정과 주의사항
