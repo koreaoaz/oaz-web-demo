@@ -99,6 +99,7 @@ function Invoke-DemoVerification([string]$Root) {
       Invoke-DemoCommand npm.cmd @('run','lint') 'ESLint'
       Invoke-DemoCommand node @('--test','--test-concurrency=1','tests/*.test.mjs') '전체 회귀 테스트'
       Invoke-DemoCommand $cli @('build','--context','production') 'Netlify SSR 및 Functions 빌드'
+      Invoke-DemoCommand node @('scripts/verify-static-assets.mjs') 'Netlify 정적 산출물'
     } finally { foreach ($name in $saved.Keys) { [Environment]::SetEnvironmentVariable($name,$saved[$name],'Process') } }
     if ((Get-DemoGitState $Root) -cne $sha -or (Get-DemoSite $cli) -cne $id) { throw '검증 중 커밋 또는 사이트가 변경됐습니다.' }
     $null = Get-DemoBuildEnvironment $cli
@@ -120,8 +121,9 @@ function Invoke-DemoDeployment([string]$Root, [switch]$Production) {
   try {
     if ((Get-DemoGitState $Root) -cne $verified.Sha -or (Get-DemoSite $verified.Cli) -cne $verified.SiteId) { throw '승인 이후 커밋 또는 사이트가 변경됐습니다.' }
     $null = Get-DemoBuildEnvironment $verified.Cli
+    Invoke-DemoCommand node @('scripts/verify-static-assets.mjs') '배포 직전 정적 산출물'
     $mode = 'draft'; if ($Production) { $mode = 'production' }
-    $arguments = @('deploy','--no-build','--site',$verified.SiteId,'--message',"Demo $mode $($verified.Sha)")
+    $arguments = @('deploy','--no-build','--dir','.netlify/static','--site',$verified.SiteId,'--message',"Demo $mode $($verified.Sha)")
     if ($Production) { $arguments += '--prod' }
     Invoke-DemoCommand $verified.Cli $arguments '승인된 기존 Demo 사이트 배포'
     Write-Host "Netlify Deploys에서 사이트와 배포 커밋을 확인하세요: $($verified.Sha)"

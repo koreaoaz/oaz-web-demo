@@ -72,8 +72,9 @@ function Reset-Mock([string]$Scenario) {
 # 이 함수가 모든 외부 호출을 가로챈다. 알려지지 않은 호출은 성공 처리하지 않는다.
 function Invoke-DemoCommand([string]$Command, [string[]]$Arguments, [string]$Label, [switch]$Capture) {
   $joined = $Arguments -join ' '; $script:calls.Add("$Command $joined")
+  if ($script:scenario -eq 'assets-after-approval' -and $joined -eq 'scripts/verify-static-assets.mjs' -and $script:approved) { throw '배포 직전 정적 파일 없음' }
   if ($script:scenario -eq 'command-failure' -and $joined -eq 'run lint') { throw 'ESLint 검사에 실패했습니다.' }
-  $failCommands = @{'fail-cli-install'='ci --prefix tools/netlify'; 'fail-install'='ci'; 'fail-types'='tsc --noEmit'; 'fail-tests'='--test --test-concurrency=1 tests/*.test.mjs'; 'fail-build'='build --context production'}
+  $failCommands = @{'fail-cli-install'='ci --prefix tools/netlify'; 'fail-install'='ci'; 'fail-types'='tsc --noEmit'; 'fail-tests'='--test --test-concurrency=1 tests/*.test.mjs'; 'fail-build'='build --context production'; 'fail-assets'='scripts/verify-static-assets.mjs'}
   if ($failCommands.ContainsKey($script:scenario) -and $joined -eq $failCommands[$script:scenario]) { throw '모의 검증 명령 실패' }
   if ($Command -eq 'node' -and $joined -eq '--version') { if ($script:scenario -eq 'node-low') { return 'v22.12.9' }; return 'v22.23.4' }
   if ($Command -eq 'git') {
@@ -110,7 +111,7 @@ function Invoke-DemoCommand([string]$Command, [string[]]$Arguments, [string]$Lab
     $item = @{}; $item[$Arguments[1]] = $value; return ($item | ConvertTo-Json -Compress)
   }
   if ($Arguments[0] -eq 'deploy') { $script:deployArgs = $Arguments; if ($script:scenario -eq 'deploy-failure') { throw '배포가 실패했습니다.' }; return }
-  if ($joined -in @('ci --prefix tools/netlify','ci','tsc --noEmit','run lint','--test --test-concurrency=1 tests/*.test.mjs','build --context production')) { return }
+  if ($joined -in @('ci --prefix tools/netlify','ci','tsc --noEmit','run lint','--test --test-concurrency=1 tests/*.test.mjs','build --context production','scripts/verify-static-assets.mjs')) { return }
   throw "모의 처리하지 않은 명령: $Command $joined"
 }
 function Read-Host([string]$Prompt) { $script:prompt = $Prompt; $script:approved = $true; if ($script:scenario -eq 'cancel') { return '' }; if ($script:scenario -eq 'wrong-approval') { return $script:sha.Substring(0,7) }; return $script:sha }
@@ -123,13 +124,14 @@ try {
     Invoke-DemoDeployment $script:root -Production:$production
     Assert-Test ($script:deployArgs -contains '--no-build') '검증된 산출물만 배포'
     Assert-Test (($script:deployArgs -contains '--prod') -eq $production) 'Draft와 Production 분리'
-    Assert-Test ($script:deployArgs[3] -eq $script:id) '기존 사이트 ID 지정'
+    Assert-Test ($script:deployArgs[3] -eq '.netlify/static') '정적 배포 경로 지정'
+    Assert-Test ($script:deployArgs[5] -eq $script:id) '기존 사이트 ID 지정'
     Assert-Test (-not ($script:deployArgs -contains '--context')) '빌드 생략 시 context 금지'
-    Assert-Test ($script:deployArgs[5] -match $script:sha) '전체 SHA 기록'
+    Assert-Test ($script:deployArgs[7] -match $script:sha) '전체 SHA 기록'
     Assert-Test ($script:prompt -ceq (Get-DemoApprovalMessage $production)) '실제 승인 프롬프트'
     Assert-Test (@($script:calls | Where-Object { $_ -match 'ls-remote' }).Count -eq 3) '검증 전후 및 승인 후 원격 SHA 조회'
   }
-  foreach ($scenario in @('cancel','wrong-approval','node-low','wrong-root','wrong-branch','dirty','wrong-origin','wrong-push','remote-changed','changed-after-approval','bad-json','auth-failure','bad-site','bad-id','bad-site-url','site-changed','production-url','secret-key','scope-mismatch','missing-env','command-failure','fail-cli-install','fail-install','fail-types','fail-tests','fail-build')) {
+  foreach ($scenario in @('cancel','wrong-approval','node-low','wrong-root','wrong-branch','dirty','wrong-origin','wrong-push','remote-changed','changed-after-approval','bad-json','auth-failure','bad-site','bad-id','bad-site-url','site-changed','production-url','secret-key','scope-mismatch','missing-env','command-failure','fail-cli-install','fail-install','fail-types','fail-tests','fail-build','fail-assets','assets-after-approval')) {
     Reset-Mock $scenario; $failed = $false
     try { Invoke-DemoDeployment $script:root -Production } catch { $failed = $true; if ($scenario -eq 'cancel') { Assert-Test ($_.Exception.Message -ceq '명시적인 배포 승인이 없어 중단했습니다.') '한글 취소 안내' } }
     Assert-Test $failed "안전 차단 $scenario"
