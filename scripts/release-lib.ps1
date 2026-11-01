@@ -12,9 +12,14 @@ function Assert-DemoNodeVersion([string]$Version) {
 
 function Invoke-DemoCommand([string]$Command, [string[]]$Arguments, [string]$Label, [switch]$Capture) {
   # 인증 상태/환경변수 JSON과 실패 stderr를 콘솔이나 파일에 노출하지 않는다.
-  try { $resolved = Get-Command -Name $Command -CommandType Application -ErrorAction Stop } catch { throw "$Label 실행에 실패했습니다. 명령 설치와 인증을 확인하세요." }
+  # 동일한 실행 파일이 PATH에 여러 개 있어도 PowerShell의 첫 검색 결과만 사용한다.
+  try { $resolved = Get-Command -Name $Command -CommandType Application -ErrorAction Stop | Select-Object -First 1 } catch { throw "$Label 실행에 실패했습니다. 명령 설치와 인증을 확인하세요." }
   $savedPreference = $ErrorActionPreference
-  try { $ErrorActionPreference = 'Continue'; $lines = @(& $resolved.Source @Arguments 2>&1); $code = $LASTEXITCODE } catch { throw "$Label 실행에 실패했습니다. 명령 설치와 인증을 확인하세요." } finally { $ErrorActionPreference = $savedPreference }
+  try { $ErrorActionPreference = 'Continue'; $lines = @(& $resolved.Source @Arguments 2>&1); $code = $LASTEXITCODE } catch {
+    # 인증정보가 포함될 수 있는 원문 대신 예외 종류만 표시한다.
+    $errorType = $_.Exception.GetType().Name -replace '[^A-Za-z0-9_]', ''
+    throw "$Label 실행에 실패했습니다. 오류 종류: $errorType"
+  } finally { $ErrorActionPreference = $savedPreference }
   if ($code -ne 0) { throw "$Label 검사에 실패했습니다. 종료 코드: $code" }
   if ($Capture) { return ($lines -join "`n").Trim() }
   Write-Host "$Label 완료"

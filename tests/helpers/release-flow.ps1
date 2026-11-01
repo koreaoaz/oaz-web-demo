@@ -14,6 +14,38 @@ $engine = (Get-Process -Id $PID).Path
 $failed = $false
 try { Invoke-DemoCommand $engine @('-NoProfile','-Command','exit 7') '가짜 실패' } catch { $failed = $_.Exception.Message -eq '가짜 실패 검사에 실패했습니다. 종료 코드: 7' }
 Assert-Test $failed '명령 실패 안내'
+if ($env:OS -eq 'Windows_NT') {
+  $fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) ('oaz-command-fixture-' + [Guid]::NewGuid().ToString('N'))
+  $originalPath = $env:Path
+  try {
+    $firstDirectory = Join-Path $fixtureRoot 'first path'
+    $secondDirectory = Join-Path $fixtureRoot 'second path'
+    [void](New-Item -ItemType Directory -Path $firstDirectory, $secondDirectory)
+    [IO.File]::WriteAllText((Join-Path $firstDirectory 'oaz-path-probe.cmd'), "@echo first`r`n", [Text.Encoding]::ASCII)
+    [IO.File]::WriteAllText((Join-Path $secondDirectory 'oaz-path-probe.cmd'), "@echo second`r`n", [Text.Encoding]::ASCII)
+    [IO.File]::WriteAllText((Join-Path $firstDirectory 'oaz-stderr-probe.cmd'), "@echo fixture_secret_value 1>&2`r`n@exit /b 7`r`n", [Text.Encoding]::ASCII)
+    [IO.File]::WriteAllBytes((Join-Path $firstDirectory 'oaz-invalid-probe.exe'), [byte[]](0, 1, 2))
+    $env:Path = "$firstDirectory;$secondDirectory;$originalPath"
+    Assert-Test (@(Get-Command oaz-path-probe.cmd -CommandType Application).Count -ge 2) '중복 PATH 재현'
+    Assert-Test ((Invoke-DemoCommand 'oaz-path-probe.cmd' @() 'PATH 순서' -Capture) -ceq 'first') '첫 실행 파일 사용'
+    Assert-Test ((Invoke-DemoCommand 'node' @('--version') 'Node.js' -Capture) -ceq (& node --version)) '실제 Node 버전 호출'
+    $failed = $false
+    try { Invoke-DemoCommand 'oaz-stderr-probe.cmd' @() '가짜 stderr' } catch {
+      $failed = $_.Exception.Message -match '종료 코드: 7' -and $_.Exception.Message -notmatch 'fixture_secret_value'
+    }
+    Assert-Test $failed '종료 코드 확인 및 stderr 비노출'
+    $failed = $false
+    try { Invoke-DemoCommand 'oaz-invalid-probe.exe' @() '가짜 실행 오류' } catch {
+      $failed = $_.Exception.Message -match '^가짜 실행 오류 실행에 실패했습니다\. 오류 종류: [A-Za-z0-9_]+$' -and $_.Exception.Message -notmatch 'oaz-invalid-probe'
+    }
+    Assert-Test $failed '실행 예외 종류만 표시'
+  } finally {
+    $env:Path = $originalPath
+    if ([IO.Path]::GetDirectoryName($fixtureRoot) -ceq [IO.Path]::GetTempPath().TrimEnd('\') -and [IO.Path]::GetFileName($fixtureRoot).StartsWith('oaz-command-fixture-')) {
+      Remove-Item -LiteralPath $fixtureRoot -Recurse -Force -ErrorAction Stop
+    } else { throw '임시 테스트 경로 확인 실패' }
+  }
+}
 foreach ($version in @('22.13.0','v22.14.0','22.23.4','22.13.0+build.1')) { Assert-DemoNodeVersion $version; Assert-Test $true '허용 버전' }
 foreach ($version in @('20.19.0','22.0.0','22.12.9','23.0.0','24.0.0','22.13.0-rc.1','','garbage','22.013.0','22.13','999999999999999999999.13.0')) {
   $failed = $false; try { Assert-DemoNodeVersion $version } catch { $failed = $_.Exception.Message -match '22.13.0' }; Assert-Test $failed "버전 거부 $version"
