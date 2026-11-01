@@ -22,3 +22,5 @@
 기존 행 ID를 다시 쓰는 순서 저장은 비활성화했다. 순서 저장은 현재 제공되지 않는다. 실제 Supabase의 GitHub OAuth, 가입 승인, RLS, Storage 업로드·삭제와 Netlify의 SSR·API, Node 22 실환경은 검증하지 않았다. 테스트 성공이 실서비스 배포 승인을 뜻하지 않는다.
 
 기존 정책 SQL은 `database/demo_security_reference.sql`에 참고용으로만 두었다. 실제 정책과 차이를 검토하지 않은 채 실행하지 않는다. 현재 빌드는 Node 24 환경에서 확인했으며 Netlify 설정은 Node 22를 지정한다.
+
+Netlify 배포 연결 확인 — 2026-11-01
