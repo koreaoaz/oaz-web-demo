@@ -1,5 +1,7 @@
 # Demo GitHub 검토 및 Netlify 배포 절차
 
+> 이전 Git 자동 배포 검토 이력이다. 현재 사용자가 설정한 Stopped builds를 유지하며, 실제 배포는 `DEMO_FINAL_RELEASE_RUNBOOK.md`의 검증·전체 SHA 승인·CLI 수동 경로만 따른다. 아래 대안을 자동 실행하거나 기존 Git 빌드를 다시 켜지 않는다.
+
 ## 권장 흐름
 
 1. `origin`의 fetch·push URL이 Demo 저장소인지 확인하고 `origin/main`을 읽기 전용으로 갱신한다. 로컬 변경사항을 보존한 상태에서 최신 main을 바탕으로 별도 개발 브랜치를 만든다. 이미 진행한 미커밋 작업은 확인 없이 버리지 않는다.

@@ -1,5 +1,7 @@
 # 마일스톤 C 보안 검토
 
+> STEP 182/183 당시의 검토 이력이다. 아래 service_role 수용·방문자 구현 설명은 현재 코드와 다르다. 현재 API는 서버 키와 관계없이 차단되며 키 설정 및 SQL 적용을 금지한다. 최신 검증·배포 기준은 `DEMO_FINAL_RELEASE_RUNBOOK.md`가 우선한다.
+
 ## 확인한 경계
 
 Editor 화면은 `getUser()`로 사용자를 확인하고 `supervisor_id`에 해당 UUID가 있을 때만 렌더링한다. 이는 화면 접근 제어이며 API 직접 호출의 방어선은 아니다. `database/demo_security_reference.sql`은 콘텐츠 테이블에 공개 SELECT 및 관리자 INSERT/UPDATE/DELETE, 회원 본인 조회, 관리자 회원 관리와 본인 가입 검증을 설계한다. Storage 쓰기는 관리자 조건에 더해 RESTRICTIVE 정책을 사용한다. RLS의 permissive 정책은 OR로, restrictive 정책은 AND로 결합되며 두 종류 중 permissive 허용도 필요하다.
