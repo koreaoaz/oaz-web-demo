@@ -87,6 +87,7 @@ function Invoke-DemoVerification([string]$Root) {
     Assert-DemoNodeVersion (Invoke-DemoCommand node @('--version') 'Node.js' -Capture)
     if ($env:NETLIFY_AUTH_TOKEN -or $env:NETLIFY_SITE_ID) { throw '환경변수로 지정된 Netlify 인증 및 사이트 지정은 사용하지 않습니다.' }
     $sha = Get-DemoGitState $Root
+    Invoke-DemoCommand node @('scripts/check-release-ci.mjs',$sha) 'GitHub main CI'
     Invoke-DemoCommand npm.cmd @('ci','--prefix','tools/netlify') '고정 Netlify CLI 설치'
     $cli = Join-Path $Root 'tools/netlify/node_modules/.bin/netlify.cmd'
     $id = Get-DemoSite $cli
@@ -121,6 +122,7 @@ function Invoke-DemoDeployment([string]$Root, [switch]$Production) {
   try {
     if ((Get-DemoGitState $Root) -cne $verified.Sha -or (Get-DemoSite $verified.Cli) -cne $verified.SiteId) { throw '승인 이후 커밋 또는 사이트가 변경됐습니다.' }
     $null = Get-DemoBuildEnvironment $verified.Cli
+    Invoke-DemoCommand node @('scripts/check-release-ci.mjs',$verified.Sha) '승인 후 GitHub main CI'
     Invoke-DemoCommand node @('scripts/verify-static-assets.mjs') '배포 직전 정적 산출물'
     $mode = 'draft'; if ($Production) { $mode = 'production' }
     $arguments = @('deploy','--no-build','--dir','.netlify/static','--site',$verified.SiteId,'--message',"Demo $mode $($verified.Sha)")

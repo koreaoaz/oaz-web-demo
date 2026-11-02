@@ -26,6 +26,6 @@ GitHub의 Demo 저장소 **Pull requests → New pull request**에서 base가 `m
 
 ## CI와 병합 SHA의 차이
 
-현재 CI는 `pull_request`와 수동 실행에서 동작하며, PR의 head 또는 GitHub가 만든 병합 검사 SHA를 검사할 수 있다. main 병합 커밋과 같은 SHA라고 가정하지 않는다. 현재 릴리스 스크립트는 로컬 테스트와 원격 main SHA는 확인하지만 **GitHub CI 성공을 조회하지 않는다**. `Checks`에서 검사 SHA·최신 base·결과를 담당자가 직접 비교한다.
+CI는 PR과 main push에서 별도로 실행된다. PR head나 가상 병합 검사 SHA는 실제 병합된 main SHA와 다를 수 있다. 릴리스 스크립트는 Git Credential Manager로 정확한 main SHA의 가장 최근 push CI와 두 필수 작업의 성공을 승인 전후 확인한다. 인증·조회 실패, 결과 없음·실패·대기면 배포를 차단한다. 담당자도 GitHub에서 SHA와 결과를 확인한다.
 
-추후 개선안: `push: main`의 토큰 없는 CI가 **병합된 정확한 SHA**에 고유한 필수 작업 결과를 남기도록 설계하고, 릴리스 도구가 지정 저장소·정확한 SHA·신뢰한 workflow/job·완료 성공을 검증한다. 결과가 없거나 실패·취소·대기·조회 불가면 안전하게 거부해야 한다. 재실행, 중복 이름, 페이지네이션, workflow 자체 변경, PR 가상 병합 SHA와 main SHA의 차이를 테스트한 뒤 도입한다. 현재 저장소에서 ruleset이 강제되지 않으면 협업자가 workflow와 검사 코드를 변경할 수 있으므로, 이 검사만으로 악의적 변경을 막을 수 없다. 실제 코드는 이번 문서 작업에서 변경하지 않았다.
+현재 저장소에서 ruleset이 강제되지 않으면 협업자가 workflow와 검사 코드를 변경할 수 있으므로, 이 검사만으로 악의적 변경이나 스크립트를 사용하지 않는 배포를 막을 수 없다. 기존 Netlify Git 빌드 설정과 배포 권한은 별도로 관리한다.
