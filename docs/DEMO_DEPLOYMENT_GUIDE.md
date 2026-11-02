@@ -22,7 +22,7 @@ git rev-parse HEAD
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-release.ps1
 ```
 
-검증은 Node 버전, Demo Git fetch/push 원격, 깨끗한 main 및 실제 원격 SHA, 사이트 이름·ID·URL, Demo 공개 환경변수, 타입·lint·테스트, Netlify 빌드와 정적 파일·서버 함수 ZIP 존재를 확인한다. GitHub CI 결과와 실제 SSR 요청 성공까지 자동으로 보장하지 않는다. 실패하면 배포하지 말고 원인을 확인한다. 자격증명 원문을 출력하지 않는다.
+검증은 Node 버전, Demo Git fetch/push 원격, 깨끗한 main 및 실제 원격 SHA, 사이트 이름·ID·URL, Demo 공개 환경변수, 타입·lint·테스트, Netlify 빌드와 정적 파일·서버 함수 ZIP 존재를 확인한다. 정확한 main SHA의 push CI와 필수 작업 성공을 승인 전후 확인하며 인증·조회 실패와 CI 미완료·실패·누락 시 차단한다. 실제 SSR 요청 성공까지 자동으로 보장하지 않는다. 자격증명 원문을 출력하지 않는다.
 
 **Draft를 배포하기로 승인받은 후에만** 아래를 실행하고, 검증 완료 후 GitHub main과 일치하는 전체 SHA를 직접 입력한다. `-Production`을 붙이지 않는다.
 
@@ -38,4 +38,4 @@ Production은 Draft 검증, 일반 회원을 포함한 실환경 API·Storage �
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\deploy-release.ps1 -Production
 ```
 
-잘못된 Node·사이트·원격·작업 트리·환경변수 또는 SHA 오류가 나면 수정 전 원인을 확인한다. GitHub CI 상태는 별도 GitHub 화면에서 확인한다. 배포 결과가 실패했다면 이전 성공 배포의 SHA를 확인하고, 승인된 담당자가 Netlify **Deploys → 이전 성공 배포 → Publish deploy**로 되돌린 뒤 화면과 SHA를 검증한다. 이는 실제 Production 변경이다. 배포·복원 명령은 이 문서 작성 중 실행하지 않았다.
+잘못된 Node·사이트·원격·작업 트리·환경변수 또는 SHA 오류가 나면 수정 전 원인을 확인한다. Git Credential Manager의 GitHub 읽기 인증과 해당 main SHA의 push CI를 GitHub 화면에서도 확인한다. 새 병합 커밋은 CI가 끝나기 전까지 배포할 수 없다. 배포 결과가 실패했다면 이전 성공 배포의 SHA를 확인하고, 승인된 담당자가 Netlify **Deploys → 이전 성공 배포 → Publish deploy**로 되돌린 뒤 화면과 SHA를 검증한다. 이는 실제 Production 변경이다. 배포·복원 명령은 이 문서 작성 중 실행하지 않았다.
